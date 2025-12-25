@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Mvc;
 using TicketFlow.Api.Entities;
 using TicketFlow.Api.DTOs;
+using Microsoft.EntityFrameworkCore;
 
 namespace TicketFlow.Api.Controllers;
 
@@ -34,5 +35,12 @@ public class TicketsController : ControllerBase
 
         // 3. Return the result (201 Created)
         return CreatedAtAction(nameof(CreateTicket), new { id = ticket.Id }, ticket);
+    }
+
+    [HttpGet]
+    public async Task<IActionResult> GetTickets()
+    {
+        var tickets = await _context.SupportTickets.ToListAsync();
+        return Ok(tickets);
     }
 }
