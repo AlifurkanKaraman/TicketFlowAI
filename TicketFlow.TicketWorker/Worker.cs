@@ -1,3 +1,5 @@
+using Microsoft.SemanticKernel;
+using Microsoft.SemanticKernel.Connectors.Google; 
 using TicketFlow.Api;
 
 namespace TicketFlow.TicketWorker;
@@ -6,11 +8,13 @@ public class Worker : BackgroundService
 {
     private readonly IServiceProvider _serviceProvider;
     private readonly ILogger<Worker> _logger;
+    private readonly IConfiguration _configuration;
 
-    public Worker(IServiceProvider serviceProvider, ILogger<Worker> logger)
+    public Worker(IServiceProvider serviceProvider, ILogger<Worker> logger, IConfiguration configuration)
     {
         _serviceProvider = serviceProvider;
         _logger = logger;
+        _configuration = configuration;
     }
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -23,39 +27,56 @@ public class Worker : BackgroundService
                 {
                     var context = scope.ServiceProvider.GetRequiredService<AppDbContext>();
 
-                    // 1. FIND WORK: Get the first ticket that is "New"
-                    var ticketToProcess = context.SupportTickets
-                        .FirstOrDefault(t => t.Status == "New");
+                    // 1. FIND WORK
+                    var ticket = context.SupportTickets.FirstOrDefault(t => t.Status == "New");
 
-                    if (ticketToProcess != null)
+                    if (ticket != null)
                     {
-                        _logger.LogInformation($"🚀 Processing Ticket #{ticketToProcess.Id}: {ticketToProcess.ProblemTitle}");
+                        _logger.LogInformation($"🚀 Asking Gemini about: {ticket.ProblemTitle}");
 
-                        // 2. DO WORK (Simulated AI)
-                        // In the next step, Semantic Kernel goes here!
-                        await Task.Delay(2000); // Fake "thinking" time
+                        // 2. SETUP GEMINI (Reads from User Secrets automatically)
+                        var apiKey = _configuration["Gemini:ApiKey"];
+                        var modelId = _configuration["Gemini:ModelId"];
 
-                        ticketToProcess.Status = "Completed";
-                        ticketToProcess.ProblemDescription += "\n\n[AI ANSWER]: Have you tried turning it off and on again?";
+                        if (string.IsNullOrEmpty(apiKey))
+                        {
+                            _logger.LogError("CRITICAL: Gemini API Key is missing! Did you run 'dotnet user-secrets set'?");
+                            continue;
+                        }
 
-                        // 3. SAVE WORK
-                        context.Update(ticketToProcess);
+                        var kernelBuilder = Kernel.CreateBuilder();
+                        kernelBuilder.AddGoogleAIGeminiChatCompletion(
+                            modelId: modelId!,
+                            apiKey: apiKey);
+                        
+                        var kernel = kernelBuilder.Build();
+
+                        // 3. ASK THE QUESTION
+                        var prompt = $@"
+                            You are a helpful IT Support Agent.
+                            The user has a problem: {ticket.ProblemTitle}
+                            Description: {ticket.ProblemDescription}
+                            
+                            Please provide a polite, step-by-step solution to fix this.";
+
+                        var result = await kernel.InvokePromptAsync(prompt);
+
+                        // 4. SAVE THE ANSWER
+                        ticket.Status = "Completed";
+                        ticket.ProblemDescription += $"\n\n[GEMINI SAYS]:\n{result}";
+
+                        context.Update(ticket);
                         await context.SaveChangesAsync();
 
-                        _logger.LogInformation($"✅ Ticket #{ticketToProcess.Id} Completed!");
-                    }
-                    else
-                    {
-                        _logger.LogInformation("💤 No new tickets. Sleeping...");
+                        _logger.LogInformation("✅ Gemini successfully answered the ticket!");
                     }
                 }
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Something went wrong in the loop!");
+                _logger.LogError(ex, "Gemini had a problem!");
             }
 
-            // Sleep for 5 seconds before checking again
             await Task.Delay(5000, stoppingToken);
         }
     }
