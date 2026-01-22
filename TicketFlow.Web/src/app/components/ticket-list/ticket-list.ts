@@ -1,11 +1,12 @@
 import { Component, inject, OnInit, signal } from '@angular/core';
 import { CommonModule } from '@angular/common'; // Important for displaying dates/loops
 import { TicketService, Ticket } from '../../services/ticket';
+import { TicketForm } from '../ticket-form/ticket-form';
 
 @Component({
   selector: 'app-ticket-list',
   standalone: true,
-  imports: [CommonModule],
+  imports: [CommonModule, TicketForm],
   templateUrl: './ticket-list.html',
   styleUrl: './ticket-list.scss'
 })
