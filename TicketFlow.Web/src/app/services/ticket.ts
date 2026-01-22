@@ -18,9 +18,13 @@ export interface Ticket {
 })
 export class TicketService {
   private http = inject(HttpClient);
-  private apiUrl = 'http://localhost:5299/api/Tickets'; // Your .NET API URL
+  private apiUrl = 'http://localhost:5299/api/Tickets';
 
   getTickets(): Observable<Ticket[]> {
     return this.http.get<Ticket[]>(this.apiUrl);
+  }
+
+  createTicket(ticket: { title: string; description: string }): Observable<Ticket> {
+    return this.http.post<Ticket>(this.apiUrl, ticket);
   }
 }

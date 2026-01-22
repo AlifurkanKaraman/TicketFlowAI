@@ -1,6 +1,8 @@
+<h2>Live Support Queue</h2>
 <div class="ticket-container">
-  <h2>Live Support Queue</h2>
+  <app-ticket-form (ticketCreated)="loadTickets()"></app-ticket-form>
 
+  <hr style="border: 0; border-top: 1px solid #eee; margin: 2rem 0" />
   <table>
     <thead>
       <tr>
